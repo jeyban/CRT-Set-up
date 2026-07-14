@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CRT Scanner</title>
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#11151f; --card:#151b27; --card2:#1b2331;
+    --border:#222c3d; --border2:#2c384c;
+    --txt:#e6ebf2; --muted:#8b97ab; --muted2:#5d6c84;
+    --accent:#4f8cff; --accent2:#2f6bff;
+    --green:#21c87a; --green-bg:rgba(33,200,122,.12);
+    --red:#ff5a6e; --red-bg:rgba(255,90,110,.12);
+    --amber:#f5b94a; --amber-bg:rgba(245,185,74,.12);
+    --radius:14px; --shadow:0 6px 24px rgba(0,0,0,.35);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(1200px 600px at 80% -10%,#16203a 0%,var(--bg) 55%);
+    color:var(--txt);font-family:var(--sans);line-height:1.5;min-height:100vh;padding-bottom:48px}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 18px}
+
+  /* Header */
+  header.top{position:sticky;top:0;z-index:30;backdrop-filter:blur(10px);
+    background:rgba(11,14,20,.78);border-bottom:1px solid var(--border)}
+  .topbar{display:flex;align-items:center;gap:14px;padding:14px 18px;max-width:1100px;margin:0 auto;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:18px}
+  .logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--accent),#7c4dff);font-size:18px}
+  .brand small{display:block;font-weight:500;font-size:11px;color:var(--muted)}
+  .topbar .spacer{flex:1}
+  .conn{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);
+    background:var(--card);border:1px solid var(--border);padding:6px 11px;border-radius:20px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted2)}
+  .dot.ok{background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
+  .dot.bad{background:var(--red);box-shadow:0 0 0 3px var(--red-bg)}
+
+  /* Mode segmented switch */
+  .segwrap{display:flex;justify-content:center;margin:28px 0 6px}
+  .segswitch{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--border);
+    border-radius:14px;padding:5px}
+  .seg{cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:inherit;
+    font-weight:650;font-size:14.5px;padding:11px 22px;min-height:44px;border-radius:10px;transition:.16s;
+    display:inline-flex;align-items:center;gap:8px}
+  .seg:hover{color:var(--txt)}
+  .seg.active{background:linear-gradient(180deg,var(--card2),var(--card));color:var(--txt);
+    box-shadow:0 0 0 1px var(--accent) inset}
+  .seg:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* Timeframe tabs */
+  .tftabs{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap}
+  .tftab{flex:1;min-width:120px;cursor:pointer;background:var(--card);border:1px solid var(--border);
+    border-radius:12px;padding:13px 16px;text-align:center;transition:.16s;user-select:none;min-height:44px}
+  .tftab:hover{border-color:var(--border2)}
+  .tftab.active{border-color:var(--accent);background:linear-gradient(180deg,var(--card2),var(--card));
+    box-shadow:0 0 0 1px var(--accent) inset}
+  .tftab .tname{font-weight:700;font-size:15px}
+  .tftab .tsub{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .tftab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* Scan bar */
+  .scanbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--card);
+    border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-top:14px}
+  .scanbar .grow{flex:1;min-width:60px}
+  .scanmsg{font-size:13px;color:var(--muted)}
+  .btn{cursor:pointer;border:none;border-radius:10px;padding:11px 18px;font-weight:650;font-size:14px;
+    min-height:44px;background:linear-gradient(180deg,var(--accent),var(--accent2));color:#fff;transition:.15s}
+  .btn:hover{filter:brightness(1.08)} .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .progress{position:relative;flex:1;min-width:120px;height:6px;border-radius:6px;background:var(--card2);overflow:hidden}
+  .progress>span{position:absolute;left:-40%;width:40%;height:100%;border-radius:6px;
+    background:linear-gradient(90deg,var(--accent),#7c4dff);animation:indet 1.1s ease-in-out infinite}
+  @keyframes indet{0%{left:-40%}100%{left:100%}}
+  @media(prefers-reduced-motion:reduce){.progress>span{animation:none;left:0;width:100%;opacity:.7}}
+
+  /* Result cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:13px;margin-top:16px}
+  .ccard{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--border);
+    border-radius:13px;padding:14px;position:relative;transition:.15s}
+  .ccard:hover{border-color:var(--border2);transform:translateY(-2px)}
+  .ccard.long{border-left:3px solid var(--green)}
+  .ccard.short{border-left:3px solid var(--red)}
+  .crow{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .sym{font-weight:760;font-size:16px;letter-spacing:-.01em}
+  .sig{font-size:11px;font-weight:750;padding:3px 9px;border-radius:7px}
+  .sig.long{background:var(--green-bg);color:var(--green)} .sig.short{background:var(--red-bg);color:var(--red)}
+  .mtag{font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;background:var(--card2);color:var(--muted)}
+  .mtag.gainer{color:var(--green)} .mtag.loser{color:var(--red)}
+  .tfbadge{margin-left:auto;font-size:11px;color:var(--muted)}
+  .qbar{margin:11px 0 9px}
+  .qbar .qhead{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .qbar .track{height:7px;background:var(--card2);border-radius:6px;overflow:hidden}
+  .qbar .fill{height:100%;border-radius:6px}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;font-size:12px;margin-top:8px}
+  .meta .k{color:var(--muted)} .meta .v{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+  .ccard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:11px;
+    padding-top:10px;border-top:1px solid var(--border)}
+  .ccard .ts{font-size:11px;color:var(--muted2)}
+  .chartlink{font-size:12px;font-weight:650}
+
+  /* States */
+  .empty,.loading{text-align:center;padding:46px 20px;color:var(--muted);border:1px dashed var(--border2);
+    border-radius:13px;background:var(--card);margin-top:16px}
+  .empty .ic{font-size:34px;opacity:.5;margin-bottom:10px}
+  .spinner{width:26px;height:26px;border:3px solid var(--border2);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .errbox{background:var(--red-bg);border:1px solid rgba(255,90,110,.35);color:#ffd5da;
+    padding:13px 16px;border-radius:11px;font-size:13.5px;margin-top:16px}
+
+  .legend{font-size:11.5px;color:var(--muted2);margin-top:10px}
+  footer{text-align:center;color:var(--muted2);font-size:12px;margin-top:34px}
+
+  @media(max-width:620px){
+    .tftab{min-width:calc(33% - 6px)}
+    .topbar{padding:11px 14px}
+    .seg{padding:11px 16px}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo" id="brandLogo">⚡</div>
+      <div>CRT Scanner
+        <small id="brandSub">Lightweight CRT scanner · MEXC Futures</small>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">Connecting…</span></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- MODE SWITCH -->
+  <div class="segwrap">
+    <div class="segswitch" id="modeSwitch" role="tablist" aria-label="Scanner mode"></div>
+  </div>
+
+  <!-- TIMEFRAME TABS -->
+  <div class="tftabs" id="tfTabs" role="tablist" aria-label="Timeframe"></div>
+
+  <!-- SCAN BAR -->
+  <div class="scanbar">
+    <button class="btn" id="scanBtn">Run scan now</button>
+    <span class="scanmsg" id="scanMsg"></span>
+    <div class="grow"></div>
+    <div class="progress" id="prog" style="display:none"><span></span></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="resultsBox"></div>
+
+  <footer>Lightweight CRT scanner · CRT engine reused as-is</footer>
+</div>
+
+<script>
+/* ============================================================
+   Config — two independent scanner modes.
+   Each mode has its OWN base URL, timeframes and universe.
+   The UI only switches between them; scanning logic is server-side.
+   ============================================================ */
+/* ------------------------------------------------------------
+   API origin resolver (connectivity only — no behavior change).
+   • Local dev (page opened from file:// or a localhost static server on any
+     port): talk directly to the backend at http://localhost:3001.
+   • Production (Vercel): use same-origin relative "/api", which the Vercel
+     rewrite proxies to the Render backend. Set window.API_ORIGIN to override.
+   ------------------------------------------------------------ */
+function resolveApiOrigin(){
+  if (typeof window.API_ORIGIN === "string") return window.API_ORIGIN;
+  const h = window.location.hostname;
+  const isLocal = h === "localhost" || h === "127.0.0.1" || h === "0.0.0.0" || h === "" || window.location.protocol === "file:";
+  return isLocal ? "http://localhost:3001" : ""; // "" = same-origin relative (prod)
+}
+const API_ORIGIN = resolveApiOrigin();
+
+const MODES = {
+  gl: {
+    key:"gl",
+    label:"Gainers & Losers",
+    icon:"⚡",
+    // Behind the Vercel rewrite "/api" proxies to the backend; GL lives at /api/gl.
+    base: window.GL_BASE || (API_ORIGIN + "/api/gl"),
+    sub:"Top 30 gainers & losers · 1H / 4H / 1D",
+    timeframes:[
+      { tf:"1h", name:"1H", meta:"Hourly" },
+      { tf:"4h", name:"4H", meta:"4-hour" },
+      { tf:"1d", name:"1D", meta:"Daily" },
+    ],
+  },
+  mr: {
+    key:"mr",
+    label:"Market Radar",
+    icon:"📡",
+    // Market Radar backend lives at /api/radar (Phase 4).
+    base: window.RADAR_BASE || (API_ORIGIN + "/api/radar"),
+    sub:"Top 300–500 coins (excl. top movers) · 1D / 1W / 1M",
+    timeframes:[
+      { tf:"1d", name:"1D", meta:"Daily" },
+      { tf:"1w", name:"1W", meta:"Weekly" },
+      { tf:"1m", name:"1M", meta:"Monthly" },
+    ],
+  },
+};
+
+const REFRESH_MS = 15000;
+let activeMode = "gl";
+const activeTfByMode = { gl:"1h", mr:"1d" };
+let scanning = false;
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = (id)=>document.getElementById(id);
+const esc = (s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fmtDateTime(iso){ if(!iso) return "–"; const d=new Date(iso); if(isNaN(d)) return "–";
+  return d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
+function num(n,d=4){ if(n==null||isNaN(n)) return "–"; const a=Math.abs(n);
+  if(a>=1000) return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
+  if(a>=1) return Number(n).toFixed(2); return Number(n).toPrecision(d); }
+function qColor(q){ if(q>=75) return "var(--green)"; if(q>=50) return "var(--amber)"; return "var(--red)"; }
+
+function currentMode(){ return MODES[activeMode]; }
+function currentTf(){ return activeTfByMode[activeMode]; }
+
+async function api(base, path, opts){
+  const r = await fetch(base+path, opts);
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+
+function loadingHtml(t){ return `<div class="loading"><div class="spinner"></div>${esc(t)}</div>`; }
+function emptyHtml(ic,title,sub){ return `<div class="empty"><div class="ic">${ic}</div><div style="font-weight:650;color:var(--txt)">${esc(title)}</div><div style="margin-top:5px">${esc(sub)}</div></div>`; }
+function setConn(ok){
+  $("connDot").className="dot "+(ok?"ok":"bad");
+  $("connTxt").textContent=ok?"Live":"Disconnected";
+}
+
+/* ============================================================
+   Build: mode switch + timeframe tabs
+   ============================================================ */
+function buildModeSwitch(){
+  $("modeSwitch").innerHTML = Object.values(MODES).map(m=>`
+    <button class="seg ${m.key===activeMode?"active":""}" role="tab"
+      aria-selected="${m.key===activeMode}" data-mode="${m.key}">
+      <span aria-hidden="true">${m.icon}</span> ${esc(m.label)}
+    </button>`).join("");
+  document.querySelectorAll("#modeSwitch .seg").forEach(el=>{
+    el.onclick=()=>selectMode(el.dataset.mode);
+  });
+}
+
+function buildTfTabs(){
+  const m=currentMode();
+  $("tfTabs").innerHTML = m.timeframes.map(t=>`
+    <div class="tftab ${t.tf===currentTf()?"active":""}" role="tab" tabindex="0"
+      aria-selected="${t.tf===currentTf()}" data-tf="${t.tf}">
+      <div class="tname">${t.name}</div>
+      <span class="tsub">${esc(t.meta)}</span>
+    </div>`).join("");
+  document.querySelectorAll("#tfTabs .tftab").forEach(el=>{
+    el.onclick=()=>selectTf(el.dataset.tf);
+    el.onkeydown=(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); selectTf(el.dataset.tf); } };
+  });
+}
+
+/* ============================================================
+   Selection + chrome
+   ============================================================ */
+function applyChrome(){
+  const m=currentMode();
+  $("brandLogo").textContent=m.icon;
+  $("brandSub").textContent=m.sub;
+}
+
+function selectMode(mode){
+  if(!MODES[mode] || (mode===activeMode)) { if(mode===activeMode) return; }
+  activeMode=mode;
+  buildModeSwitch();
+  buildTfTabs();
+  applyChrome();
+  loadResults();
+}
+
+function selectTf(tf){
+  if(tf===currentTf()) return;
+  activeTfByMode[activeMode]=tf;
+  buildTfTabs();
+  loadResults();
+}
+
+/* ============================================================
+   Results (the whole scanner is now just this view)
+   ============================================================ */
+async function loadResults(){
+  const m=currentMode(), tf=currentTf();
+  const box=$("resultsBox");
+  box.innerHTML=loadingHtml("Loading results…");
+  const token = m.key+":"+tf;
+  box.dataset.token=token;
+  try{
+    const { results=[] } = await api(m.base, `/${tf}/results`);
+    if(box.dataset.token!==token) return; // a newer selection won
+    setConn(true);
+    if(!results.length){
+      box.innerHTML=emptyHtml("🔍","No valid CRT setups found.",
+        `No valid CRT setups in the latest ${tf.toUpperCase()} scan. Run a scan to check now.`);
+      return;
+    }
+    box.innerHTML = `<div class="cards">`+results.map(resultCard).join("")+`</div>
+      <div class="legend">${results.length} setup(s) · sorted by quality</div>`;
+  }catch(e){
+    if(box.dataset.token!==token) return;
+    setConn(false);
+    box.innerHTML=`<div class="errbox">Could not load results: ${esc(e.message)}. Is the backend running?</div>`;
+  }
+}
+
+function resultCard(r){
+  const sigCls = r.signal==="LONG"?"long":"short";
+  const q=r.qualityScore||0;
+  const d=r.details||{};
+  const mover = r.moverType
+    ? `<span class="mtag ${esc(r.moverType)}">${r.moverType==='gainer'?'▲ gainer':r.moverType==='loser'?'▼ loser':'• mover'}</span>`
+    : "";
+  return `<div class="ccard ${sigCls}">
+    <div class="crow">
+      <span class="sym">${esc(r.symbol)}</span>
+      <span class="sig ${sigCls}">${esc(r.signal)}</span>
+      ${mover}
+      <span class="tfbadge">${esc((r.timeframe||'').toUpperCase())}</span>
+    </div>
+    <div class="qbar">
+      <div class="qhead"><span>CRT Quality</span><span style="color:${qColor(q)};font-weight:700">${q}/100</span></div>
+      <div class="track"><div class="fill" style="width:${q}%;background:${qColor(q)}"></div></div>
+    </div>
+    <div class="meta">
+      <span class="k">Price</span><span class="v">${num(d.currentPrice)}</span>
+      <span class="k">Sweep level</span><span class="v">${num(d.sweepLevel)}</span>
+      <span class="k">C1 high / low</span><span class="v">${num(d.c1High)} / ${num(d.c1Low)}</span>
+      <span class="k">Reclaim</span><span class="v">${esc(d.reclaimPercent)}%</span>
+      ${r.changeRate!=null?`<span class="k">24h change</span><span class="v" style="color:${r.changeRate>=0?'var(--green)':'var(--red)'}">${r.changeRate>=0?'+':''}${num(r.changeRate,3)}%</span>`:""}
+    </div>
+    <div class="foot">
+      <span class="ts">${fmtDateTime(r.detectionTime)}</span>
+      ${r.chartUrl?`<a class="chartlink" href="${esc(r.chartUrl)}" target="_blank" rel="noopener">Chart ↗</a>`:""}
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   Scan action (server-side scan is unchanged; UI just triggers it)
+   ============================================================ */
+async function runScan(){
+  if(scanning) return;
+  const m=currentMode(), tf=currentTf();
+  scanning=true;
+  const btn=$("scanBtn");
+  btn.disabled=true; btn.textContent="Scanning…";
+  $("prog").style.display="block";
+  $("scanMsg").textContent=`Scanning ${m.label} · ${tf.toUpperCase()}…`;
+  try{
+    const res=await api(m.base, `/${tf}/scan`, {method:"POST"});
+    if(res && res.error){ $("scanMsg").textContent="Scan error: "+res.error; }
+    else { $("scanMsg").textContent = (res && res.found!=null) ? `Found ${res.found} setup(s).` : "Scan complete."; }
+    await loadResults();
+  }catch(e){
+    $("scanMsg").textContent="Scan failed: "+e.message;
+    await loadResults();
+  }finally{
+    scanning=false;
+    btn.disabled=false; btn.textContent="Run scan now";
+    $("prog").style.display="none";
+  }
+}
+
+/* ============================================================
+   Boot + light auto-refresh of the active view
+   ============================================================ */
+function boot(){
+  buildModeSwitch();
+  buildTfTabs();
+  applyChrome();
+  $("scanBtn").onclick=runScan;
+  loadResults();
+  setInterval(()=>{ if(!scanning) loadResults(); }, REFRESH_MS);
+}
+boot();
+</script>
+</body>
+</html>

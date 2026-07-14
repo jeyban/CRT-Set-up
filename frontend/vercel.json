@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://crt-gl.onrender.com/api/:path*"
+    }
+  ]
+}
