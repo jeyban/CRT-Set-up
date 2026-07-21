@@ -5,9 +5,9 @@
  * and the SHARED Quality Score engine (../crtQuality). The engine decides
  * validity; this module never weakens or overrides a CRT rule. It only layers
  * PRESENTATION metadata on top of a valid setup:
- *   • signal label (LONG/SHORT)
- *   • quality score (ranking only - shared crtQuality)
- *   • mover type (gainer/loser)
+ *   - signal label (LONG/SHORT)
+ *   - quality score (ranking only - shared crtQuality)
+ *   - mover type (gainer/loser)
  *
  * Per-scan workflow (universe rules per spec):
  *   1. Fetch Top 30 Gainers + Top 30 Losers from MEXC futures.
@@ -18,34 +18,34 @@
  * Each timeframe runs through its own call; a per-tf `running` guard ensures one
  * scanner can never disturb another.
  */
-​
+
 const { getTopMovers, fetchKlines } = require("./glMexc");
 // The shared engine now returns the full quality metrics + Quality Score on
 // the alert object itself, so the scanner never re-computes them (no duplicate
 // calculation). We only need the detector here.
 const { detectCRT } = require("../crtLogic");
-​
+
 // Fetch enough candles for the engine's C1/C2/C3 plus the recent baseline used
 // for Average Body / Impulse Strength (RECENT_LOOKBACK = 10 -> 13 minimum).
 const CANDLE_LIMIT = 15;
 const store = require("./glStore");
-​
+
 const DELAY_MS = 150;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-​
+
 // Per-timeframe running guard - independent locks.
 const running = { "1h": false, "4h": false, "1d": false };
-​
+
 /** Map the engine's direction to a trading signal label. */
 function toSignal(direction) {
   return direction === "BULLISH" ? "LONG" : "SHORT";
 }
-​
+
 /** MEXC futures quick chart link. */
 function chartLink(symbol) {
   return "https://futures.mexc.com/exchange/" + symbol;
 }
-​
+
 /**
  * Run a single scan for one timeframe.
  *
@@ -55,16 +55,16 @@ function chartLink(symbol) {
  */
 async function runScan(tf, type = "manual") {
   if (!store.isValidTf(tf)) throw new Error(`Invalid timeframe: ${tf}`);
-​
+
   if (running[tf]) {
     store.appendLog(tf, "warn", `Scan already running for ${tf} - ignored duplicate trigger`);
     return { results: store.getResults(tf), summary: store.getState(tf), alreadyRunning: true };
   }
   running[tf] = true;
-​
+
   const label = tf.toUpperCase();
-  store.appendLog(tf, "info", `▶ ${type.toUpperCase()} scan started for ${label}`);
-​
+  store.appendLog(tf, "info", `> ${type.toUpperCase()} scan started for ${label}`);
+
   let movers;
   try {
     movers = await getTopMovers(30);
@@ -74,23 +74,23 @@ async function runScan(tf, type = "manual") {
     running[tf] = false;
     return { results: store.getResults(tf), summary: store.getState(tf), error: err.message };
   }
-​
+
   const universe = movers.universe;
   store.beginScan(tf, type, universe.length);
   store.appendLog(
     tf,
     "info",
-    `Universe ready - ${movers.gainers.length} gainers + ${movers.losers.length} losers → ${universe.length} unique symbols`
+    `Universe ready - ${movers.gainers.length} gainers + ${movers.losers.length} losers -> ${universe.length} unique symbols`
   );
-​
+
   // Lookup helpers for enrichment
   const gainerSet = new Set(movers.gainers.map((g) => g.symbol));
   const loserSet = new Set(movers.losers.map((l) => l.symbol));
-​
+
   const results = [];
   let scanned = 0;
   let errors = 0;
-​
+
   for (const symbol of universe) {
     try {
       const candles = await fetchKlines(symbol, tf, CANDLE_LIMIT);
@@ -100,12 +100,12 @@ async function runScan(tf, type = "manual") {
         await sleep(DELAY_MS);
         continue;
       }
-​
+
       // Confirmed closed-candle CRT engine - detection only, no live price.
       const alert = detectCRT(symbol, tf, candles);
-​
+
       scanned++;
-​
+
       if (alert) {
         // Score ONLY setups that already passed detection (never rejected ones).
         // Reuse the engine's own confirmed pair so ranking and detection agree.
@@ -114,7 +114,7 @@ async function runScan(tf, type = "manual") {
           : loserSet.has(symbol)
           ? "loser"
           : "both";
-​
+
         const enriched = {
           ...alert,                       // verbatim engine output (CRT details + metrics + score)
           signal: toSignal(alert.direction),
@@ -139,10 +139,10 @@ async function runScan(tf, type = "manual") {
         store.appendLog(
           tf,
           "found",
-          `✅ ${symbol} ${alert.direction === "BULLISH" ? "Bullish" : "Bearish"} CRT · ` +
-            `Body ${alert.bodyRatio}x · Wick ${alert.wickRatio} · Sweep ${alert.sweepPercent}% · ` +
-            `Reclaim ${alert.reclaimDepth}% · Impulse ${alert.impulsePercent != null ? alert.impulsePercent + "%" : "n/a"} · ` +
-            `Quality ${alert.qualityScore}/100 · Current Candle: C3 LIVE`
+          `[OK] ${symbol} ${alert.direction === "BULLISH" ? "Bullish" : "Bearish"} CRT - ` +
+            `Body ${alert.bodyRatio}x - Wick ${alert.wickRatio} - Sweep ${alert.sweepPercent}% - ` +
+            `Reclaim ${alert.reclaimDepth}% - Impulse ${alert.impulsePercent != null ? alert.impulsePercent + "%" : "n/a"} - ` +
+            `Quality ${alert.qualityScore}/100 - Current Candle: C3 LIVE`
         );
       } else {
         store.updateProgress(tf, { scanned: 1 });
@@ -154,14 +154,14 @@ async function runScan(tf, type = "manual") {
     }
     await sleep(DELAY_MS);
   }
-​
+
   // Quality over quantity: results are exactly the valid CRTs, strongest first.
   results.sort((a, b) => b.qualityScore - a.qualityScore);
-​
+
   // Persist: results stay visible until the next scan; history is appended.
   store.setResults(tf, results);
   store.appendHistory(tf, results);
-​
+
   const summary = {
     symbolsScanned: scanned,
     gainersCount: movers.gainers.length,
@@ -171,20 +171,19 @@ async function runScan(tf, type = "manual") {
     errors,
   };
   store.finishScan(tf, summary);
-​
+
   store.appendLog(
     tf,
     "info",
-    `■ Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
+    `- Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
   );
-​
+
   running[tf] = false;
   return { results, summary };
 }
-​
+
 function isRunning(tf) {
   return !!running[tf];
 }
-​
+
 module.exports = { runScan, isRunning, toSignal, chartLink };
-​
