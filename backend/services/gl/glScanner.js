@@ -1,18 +1,18 @@
 /**
- * glScanner.js — Scan engine for the Gainers/Losers CRT module.
+ * glScanner.js - Scan engine for the Gainers/Losers CRT module.
  *
  * Detection uses the SHARED confirmed closed-candle CRT engine (../crtLogic)
  * and the SHARED Quality Score engine (../crtQuality). The engine decides
  * validity; this module never weakens or overrides a CRT rule. It only layers
  * PRESENTATION metadata on top of a valid setup:
  *   • signal label (LONG/SHORT)
- *   • quality score (ranking only — shared crtQuality)
+ *   • quality score (ranking only - shared crtQuality)
  *   • mover type (gainer/loser)
  *
  * Per-scan workflow (universe rules per spec):
  *   1. Fetch Top 30 Gainers + Top 30 Losers from MEXC futures.
  *   2. De-duplicate into a single scan universe.
- *   3. Scan that universe with detectCRT() — closed candles only.
+ *   3. Scan that universe with detectCRT() - closed candles only.
  *   4. Score + sort valid setups (highest quality first), then persist.
  *
  * Each timeframe runs through its own call; a per-tf `running` guard ensures one
@@ -33,7 +33,7 @@ const store = require("./glStore");
 const DELAY_MS = 150;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 ​
-// Per-timeframe running guard — independent locks.
+// Per-timeframe running guard - independent locks.
 const running = { "1h": false, "4h": false, "1d": false };
 ​
 /** Map the engine's direction to a trading signal label. */
@@ -57,7 +57,7 @@ async function runScan(tf, type = "manual") {
   if (!store.isValidTf(tf)) throw new Error(`Invalid timeframe: ${tf}`);
 ​
   if (running[tf]) {
-    store.appendLog(tf, "warn", `Scan already running for ${tf} — ignored duplicate trigger`);
+    store.appendLog(tf, "warn", `Scan already running for ${tf} - ignored duplicate trigger`);
     return { results: store.getResults(tf), summary: store.getState(tf), alreadyRunning: true };
   }
   running[tf] = true;
@@ -80,7 +80,7 @@ async function runScan(tf, type = "manual") {
   store.appendLog(
     tf,
     "info",
-    `Universe ready — ${movers.gainers.length} gainers + ${movers.losers.length} losers → ${universe.length} unique symbols`
+    `Universe ready - ${movers.gainers.length} gainers + ${movers.losers.length} losers → ${universe.length} unique symbols`
   );
 ​
   // Lookup helpers for enrichment
@@ -101,7 +101,7 @@ async function runScan(tf, type = "manual") {
         continue;
       }
 ​
-      // Confirmed closed-candle CRT engine — detection only, no live price.
+      // Confirmed closed-candle CRT engine - detection only, no live price.
       const alert = detectCRT(symbol, tf, candles);
 ​
       scanned++;
@@ -150,7 +150,7 @@ async function runScan(tf, type = "manual") {
     } catch (err) {
       errors++;
       store.updateProgress(tf, { errors: 1 });
-      store.appendLog(tf, "error", `${symbol} — ${err.message}`);
+      store.appendLog(tf, "error", `${symbol} - ${err.message}`);
     }
     await sleep(DELAY_MS);
   }
@@ -175,7 +175,7 @@ async function runScan(tf, type = "manual") {
   store.appendLog(
     tf,
     "info",
-    `■ Scan complete — ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
+    `■ Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
   );
 ​
   running[tf] = false;
