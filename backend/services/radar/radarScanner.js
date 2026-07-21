@@ -4,8 +4,8 @@
  * Logically INDEPENDENT from the Gainers/Losers scanner (its own universe
  * provider, timeframe config, store and running guard), but it shares the exact
  * same BUSINESS LOGIC:
- *   • CRT detection  -> ../crtLogic   (detectCRT / getConfirmedPair)
- *   • Quality Score  -> ../crtQuality (computeQuality)
+ *   - CRT detection  -> ../crtLogic   (detectCRT / getConfirmedPair)
+ *   - Quality Score  -> ../crtQuality (computeQuality)
  * These are the identical modules the GL scanner imports - never duplicated.
  *
  * Per-scan workflow:
@@ -17,34 +17,34 @@
  * The enriched result shape is IDENTICAL to the GL scanner's, so both scanners
  * render through the same frontend card with the same response format.
  */
-​
+
 const { getRadarUniverse, fetchKlines } = require("./radarMexc");
 // The shared engine now returns the full quality metrics + Quality Score on
 // the alert object itself, so the scanner never re-computes them (no duplicate
 // calculation). We only need the detector here.
 const { detectCRT } = require("../crtLogic");
-​
+
 // Fetch enough candles for the engine's C1/C2/C3 plus the recent baseline used
 // for Average Body / Impulse Strength (RECENT_LOOKBACK = 10 -> 13 minimum).
 const CANDLE_LIMIT = 15;
 const store = require("./radarStore");
-​
+
 const DELAY_MS = 150;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-​
+
 // Per-timeframe running guard - independent locks (1d / 1w / 1m).
 const running = { "1d": false, "1w": false, "1m": false };
-​
+
 /** Map the engine's direction to a trading signal label. */
 function toSignal(direction) {
   return direction === "BULLISH" ? "LONG" : "SHORT";
 }
-​
+
 /** MEXC futures quick chart link. */
 function chartLink(symbol) {
   return "https://futures.mexc.com/exchange/" + symbol;
 }
-​
+
 /**
  * Run a single Market Radar scan for one timeframe.
  *
@@ -54,16 +54,16 @@ function chartLink(symbol) {
  */
 async function runScan(tf, type = "manual") {
   if (!store.isValidTf(tf)) throw new Error(`Invalid timeframe: ${tf}`);
-​
+
   if (running[tf]) {
     store.appendLog(tf, "warn", `Scan already running for ${tf} - ignored duplicate trigger`);
     return { results: store.getResults(tf), summary: store.getState(tf), alreadyRunning: true };
   }
   running[tf] = true;
-​
+
   const label = tf.toUpperCase();
-  store.appendLog(tf, "info", `▶ ${type.toUpperCase()} Market Radar scan started for ${label}`);
-​
+  store.appendLog(tf, "info", `> ${type.toUpperCase()} Market Radar scan started for ${label}`);
+
   let uni;
   try {
     uni = await getRadarUniverse();
@@ -73,7 +73,7 @@ async function runScan(tf, type = "manual") {
     running[tf] = false;
     return { results: store.getResults(tf), summary: store.getState(tf), error: err.message };
   }
-​
+
   const universe = uni.universe;
   store.beginScan(tf, type, universe.length);
   store.appendLog(
@@ -81,11 +81,11 @@ async function runScan(tf, type = "manual") {
     "info",
     `Universe ready - ${universe.length} coins (top ${universe.length} by turnover, excl. ${uni.excluded.length} top movers)`
   );
-​
+
   const results = [];
   let scanned = 0;
   let errors = 0;
-​
+
   for (const symbol of universe) {
     try {
       const candles = await fetchKlines(symbol, tf, CANDLE_LIMIT);
@@ -95,12 +95,12 @@ async function runScan(tf, type = "manual") {
         await sleep(DELAY_MS);
         continue;
       }
-​
+
       // Shared confirmed closed-candle CRT engine - detection only.
       const alert = detectCRT(symbol, tf, candles);
-​
+
       scanned++;
-​
+
       if (alert) {
         // Score ONLY setups that passed detection (never rejected ones), using
         // the engine's own confirmed pair so ranking and detection agree.
@@ -128,10 +128,10 @@ async function runScan(tf, type = "manual") {
         store.appendLog(
           tf,
           "found",
-          `✅ ${symbol} ${alert.direction === "BULLISH" ? "Bullish" : "Bearish"} CRT · ` +
-            `Body ${alert.bodyRatio}x · Wick ${alert.wickRatio} · Sweep ${alert.sweepPercent}% · ` +
-            `Reclaim ${alert.reclaimDepth}% · Impulse ${alert.impulsePercent != null ? alert.impulsePercent + "%" : "n/a"} · ` +
-            `Quality ${alert.qualityScore}/100 · Current Candle: C3 LIVE`
+          `[OK] ${symbol} ${alert.direction === "BULLISH" ? "Bullish" : "Bearish"} CRT - ` +
+            `Body ${alert.bodyRatio}x - Wick ${alert.wickRatio} - Sweep ${alert.sweepPercent}% - ` +
+            `Reclaim ${alert.reclaimDepth}% - Impulse ${alert.impulsePercent != null ? alert.impulsePercent + "%" : "n/a"} - ` +
+            `Quality ${alert.qualityScore}/100 - Current Candle: C3 LIVE`
         );
       } else {
         store.updateProgress(tf, { scanned: 1 });
@@ -143,13 +143,13 @@ async function runScan(tf, type = "manual") {
     }
     await sleep(DELAY_MS);
   }
-​
+
   // Quality over quantity: results are exactly the valid CRTs, strongest first.
   results.sort((a, b) => b.qualityScore - a.qualityScore);
-​
+
   store.setResults(tf, results);
   store.appendHistory(tf, results);
-​
+
   const summary = {
     symbolsScanned: scanned,
     universeSize: universe.length,
@@ -158,19 +158,19 @@ async function runScan(tf, type = "manual") {
     errors,
   };
   store.finishScan(tf, summary);
-​
+
   store.appendLog(
     tf,
     "info",
-    `■ Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
+    `- Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
   );
-​
+
   running[tf] = false;
   return { results, summary };
 }
-​
+
 function isRunning(tf) {
   return !!running[tf];
 }
-​
+
 module.exports = { runScan, isRunning, toSignal, chartLink };
