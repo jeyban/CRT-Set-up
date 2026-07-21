@@ -33,7 +33,7 @@
  * downstream. The returned object carries BOTH the final score AND every raw
  * metric (we never store only the score).
  */
-​
+
 const { computeQuality, clamp } = require("./crtQuality");
 ​
 // -- Detection tuning (documented, tunable) -------------------------------
