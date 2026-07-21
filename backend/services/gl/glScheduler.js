@@ -19,21 +19,21 @@
  * Each scanner is registered separately and calls glScanner.runScan(tf, "auto")
  * independently - one schedule can never affect another.
  */
-​
+
 const cron = require("node-cron");
 const { runScan } = require("./glScanner");
 const store = require("./glStore");
-​
+
 let started = false;
 const tasks = {};
-​
+
 /** Cron expression per timeframe (UTC). */
 const CRON = {
   "1h": "1 * * * *",
   "4h": "1 0,4,8,12,16,20 * * *",
   "1d": "1 0 * * *",
 };
-​
+
 /**
  * Compute the next scheduled scan time (ISO) for a timeframe, in UTC.
  * @param {"1h"|"4h"|"1d"} tf
@@ -69,21 +69,21 @@ function computeNextScan(tf, from = new Date()) {
   }
   return null;
 }
-​
+
 /** Refresh the stored nextScan field for every timeframe. */
 function refreshNextScans() {
   for (const tf of store.TFS) {
     store.setNextScan(tf, computeNextScan(tf));
   }
 }
-​
+
 /**
  * Run an auto scan for a timeframe and then refresh its next-scan time.
  * Errors are logged but never thrown (so cron keeps running).
  */
 async function autoScan(tf) {
   try {
-    console.log(`\n⏰ [GL CRON] ${tf.toUpperCase()} auto scan @ ${new Date().toISOString()}`);
+    console.log(`\n[CRON] [GL CRON] ${tf.toUpperCase()} auto scan @ ${new Date().toISOString()}`);
     await runScan(tf, "auto");
   } catch (err) {
     console.error(`[GL CRON] ${tf} auto scan error:`, err.message);
@@ -92,26 +92,26 @@ async function autoScan(tf) {
     store.setNextScan(tf, computeNextScan(tf));
   }
 }
-​
+
 /** Register all three independent cron jobs. */
 function startGlScheduler() {
   if (started) {
-    console.log("⏰ [GL] Scheduler already running - skipping duplicate registration");
+    console.log("[CRON] [GL] Scheduler already running - skipping duplicate registration");
     return;
   }
   started = true;
-​
-  console.log("⏰ [GL] Starting Gainers/Losers schedulers (UTC):");
+
+  console.log("[CRON] [GL] Starting Gainers/Losers schedulers (UTC):");
   for (const tf of store.TFS) {
     tasks[tf] = cron.schedule(CRON[tf], () => autoScan(tf), { timezone: "UTC" });
-    console.log(`  • ${tf.toUpperCase()}: ${CRON[tf]}`);
+    console.log(`  - ${tf.toUpperCase()}: ${CRON[tf]}`);
   }
-​
+
   refreshNextScans();
   // Keep nextScan fresh even if the process stays up across a boundary.
   setInterval(refreshNextScans, 60 * 1000);
 }
-​
+
 /**
  * Fire one background startup scan per timeframe so the dashboard is never
  * empty on first boot. Non-blocking and staggered to avoid hammering the API.
@@ -124,7 +124,7 @@ function runGlStartupScans() {
     }, i * 5000); // 0s, 5s, 10s
   });
 }
-​
+
 module.exports = {
   startGlScheduler,
   runGlStartupScans,
@@ -132,4 +132,3 @@ module.exports = {
   refreshNextScans,
   CRON,
 };
-​
