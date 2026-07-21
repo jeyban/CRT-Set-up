@@ -6,8 +6,8 @@
  * Quality Score / Grade / Strengths are never duplicated elsewhere.
  *
  * Responsibility boundary (unchanged):
- *   • crtLogic.js  decides VALIDITY (is this a CRT at all?).
- *   • crtQuality.js only RANKS + GRADES a setup the engine already accepted.
+ *   - crtLogic.js  decides VALIDITY (is this a CRT at all?).
+ *   - crtQuality.js only RANKS + GRADES a setup the engine already accepted.
  * Pure and dependency-free - no I/O, no live data, no persistence.
  *
  * -- Score model (0..100) -------------------------------------------------
@@ -26,11 +26,11 @@
  * a metric is unavailable (e.g. no candle history for Impulse) its weight is
  * dropped and the remaining weights are renormalized so the score stays 0..100.
  */
-​
+
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
-​
+
 /** Component weights (as points out of 100). MUST sum to 100. */
 const WEIGHTS = {
   body: 30,
@@ -39,7 +39,7 @@ const WEIGHTS = {
   reclaim: 20,
   impulse: 15,
 };
-​
+
 /**
  * Saturation points. A metric at or above its "full" value earns the full 100
  * for that component; beyond it, extra magnitude does not keep inflating the
@@ -50,7 +50,7 @@ const WICK_RATIO_FULL = 3; // wick/Body(C2)     >= 3   -> full wick score
 const SWEEP_PCT_FULL = 1.0; // sweep percent    >= 1.0% -> full sweep score
 const IMPULSE_FULL = 2.5; // Body(C1)/avgBody   >= 2.5 -> full impulse score
 // Reclaim Depth is already expressed as a 0..100 percentage.
-​
+
 function normBodyRatio(r) {
   return r == null ? null : clamp((r / BODY_RATIO_FULL) * 100, 0, 100);
 }
@@ -66,7 +66,7 @@ function normReclaimDepth(d) {
 function normImpulse(r) {
   return r == null ? null : clamp((r / IMPULSE_FULL) * 100, 0, 100);
 }
-​
+
 /**
  * Map a 0..100 Quality Score to a letter grade.
  *   A+ >= 90 | A >= 80 | B >= 70 | C >= 60 | D >= 50 | F < 50
@@ -79,7 +79,7 @@ function gradeForScore(score) {
   if (score >= 50) return "D";
   return "F";
 }
-​
+
 /**
  * Human-readable reasons a setup scored well. Each rule fires ONLY when the
  * corresponding raw metric clears a "genuinely good" threshold, so the returned
@@ -92,11 +92,11 @@ const STRENGTH_RULES = [
   { test: (m) => m.reclaimDepth != null && m.reclaimDepth >= 50, label: "Deep reclaim" },
   { test: (m) => m.impulseStrength != null && m.impulseStrength >= 1.5, label: "Above-average impulse" },
 ];
-​
+
 function deriveStrengths(metrics) {
   return STRENGTH_RULES.filter((r) => r.test(metrics)).map((r) => r.label);
 }
-​
+
 /**
  * Compute the Quality Score, Grade, per-dimension breakdown and Strengths for a
  * VALID CRT setup from its raw metrics.
@@ -117,11 +117,11 @@ function computeQuality(m) {
     { key: "reclaim", weight: WEIGHTS.reclaim, score: normReclaimDepth(m.reclaimDepth) },
     { key: "impulse", weight: WEIGHTS.impulse, score: normImpulse(m.impulseStrength) },
   ];
-​
+
   let weightedPoints = 0; // sum of (subScore/100 * weightPoints)
   let weightAvailable = 0; // sum of weightPoints actually used
   const breakdown = {};
-​
+
   for (const c of components) {
     if (c.score == null) {
       breakdown[c.key] = null; // metric not available for this setup
@@ -132,11 +132,11 @@ function computeQuality(m) {
     weightedPoints += contribution;
     weightAvailable += c.weight;
   }
-​
+
   // Renormalize by available weight so a missing metric can't deflate the score.
   const finalScore = weightAvailable > 0 ? (weightedPoints / weightAvailable) * 100 : 0;
   const qualityScore = clamp(Math.round(finalScore), 0, 100);
-​
+
   return {
     qualityScore,
     qualityGrade: gradeForScore(qualityScore),
@@ -144,7 +144,7 @@ function computeQuality(m) {
     strengths: deriveStrengths(m),
   };
 }
-​
+
 module.exports = {
   computeQuality,
   gradeForScore,
