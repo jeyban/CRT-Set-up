@@ -138,7 +138,7 @@
       </div>
     </div>
     <div class="spacer"></div>
-    <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">Connecting…</span></div>
+    <div class="conn"><span class="dot" id="connDot"></span><span id="connTxt">Connecting...</span></div>
   </div>
 </header>
 ​
@@ -173,12 +173,12 @@
 ​
 <script>
 /* ============================================================
-   Config — two independent scanner modes.
+   Config - two independent scanner modes.
    Each mode has its OWN base URL, timeframes and universe.
    The UI only switches between them; scanning logic is server-side.
    ============================================================ */
 /* ------------------------------------------------------------
-   API origin resolver (connectivity only — no behavior change).
+   API origin resolver (connectivity only - no behavior change).
    • Local dev (page opened from file:// or a localhost static server on any
      port): talk directly to the backend at http://localhost:3001.
    • Production (Vercel): use same-origin relative "/api", which the Vercel
@@ -212,7 +212,7 @@ const MODES = {
     icon:"📡",
     // Market Radar backend lives at /api/radar (Phase 4).
     base: window.RADAR_BASE || (API_ORIGIN + "/api/radar"),
-    sub:"Top 300–500 coins (excl. top movers) · 1D / 1W / 1M",
+    sub:"Top 300-500 coins (excl. top movers) · 1D / 1W / 1M",
     timeframes:[
       { tf:"1d", name:"1D", meta:"Daily" },
       { tf:"1w", name:"1W", meta:"Weekly" },
@@ -231,9 +231,9 @@ let scanning = false;
    ============================================================ */
 const $ = (id)=>document.getElementById(id);
 const esc = (s)=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function fmtDateTime(iso){ if(!iso) return "–"; const d=new Date(iso); if(isNaN(d)) return "–";
+function fmtDateTime(iso){ if(!iso) return "-"; const d=new Date(iso); if(isNaN(d)) return "-";
   return d.toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); }
-function num(n,d=4){ if(n==null||isNaN(n)) return "–"; const a=Math.abs(n);
+function num(n,d=4){ if(n==null||isNaN(n)) return "-"; const a=Math.abs(n);
   if(a>=1000) return Number(n).toLocaleString(undefined,{maximumFractionDigits:2});
   if(a>=1) return Number(n).toFixed(2); return Number(n).toPrecision(d); }
 function qColor(q){ if(q>=75) return "var(--green)"; if(q>=50) return "var(--amber)"; return "var(--red)"; }
@@ -313,7 +313,7 @@ function selectTf(tf){
 async function loadResults(){
   const m=currentMode(), tf=currentTf();
   const box=$("resultsBox");
-  box.innerHTML=loadingHtml("Loading results…");
+  box.innerHTML=loadingHtml("Loading results...");
   const token = m.key+":"+tf;
   box.dataset.token=token;
   try{
@@ -375,11 +375,11 @@ function resultCard(r){
       <span class="k">Price</span><span class="v">${num(d.currentPrice)}</span>
       <span class="k">Sweep level</span><span class="v">${num(d.sweepLevel)}</span>
       <span class="k">C1 high / low</span><span class="v">${num(d.c1High)} / ${num(d.c1Low)}</span>
-      <span class="k">Body ratio</span><span class="v">${r.bodyRatio!=null?r.bodyRatio+'x':'–'}</span>
-      <span class="k">Wick ratio</span><span class="v">${r.wickRatio!=null?r.wickRatio:'–'}</span>
-      <span class="k">Sweep</span><span class="v">${r.sweepPercent!=null?r.sweepPercent+'%':'–'}</span>
-      <span class="k">Reclaim depth</span><span class="v">${r.reclaimDepth!=null?r.reclaimDepth+'%':'–'}</span>
-      <span class="k">Impulse</span><span class="v">${r.impulsePercent!=null?r.impulsePercent+'%':'–'}</span>
+      <span class="k">Body ratio</span><span class="v">${r.bodyRatio!=null?r.bodyRatio+'x':'-'}</span>
+      <span class="k">Wick ratio</span><span class="v">${r.wickRatio!=null?r.wickRatio:'-'}</span>
+      <span class="k">Sweep</span><span class="v">${r.sweepPercent!=null?r.sweepPercent+'%':'-'}</span>
+      <span class="k">Reclaim depth</span><span class="v">${r.reclaimDepth!=null?r.reclaimDepth+'%':'-'}</span>
+      <span class="k">Impulse</span><span class="v">${r.impulsePercent!=null?r.impulsePercent+'%':'-'}</span>
       ${r.changeRate!=null?`<span class="k">24h change</span><span class="v" style="color:${r.changeRate>=0?'var(--green)':'var(--red)'}">${r.changeRate>=0?'+':''}${num(r.changeRate,3)}%</span>`:""}
     </div>
     <div class="foot">
@@ -397,9 +397,9 @@ async function runScan(){
   const m=currentMode(), tf=currentTf();
   scanning=true;
   const btn=$("scanBtn");
-  btn.disabled=true; btn.textContent="Scanning…";
+  btn.disabled=true; btn.textContent="Scanning...";
   $("prog").style.display="block";
-  $("scanMsg").textContent=`Scanning ${m.label} · ${tf.toUpperCase()}…`;
+  $("scanMsg").textContent=`Scanning ${m.label} · ${tf.toUpperCase()}...`;
   try{
     const res=await api(m.base, `/${tf}/scan`, {method:"POST"});
     if(res && res.error){ $("scanMsg").textContent="Scan error: "+res.error; }
