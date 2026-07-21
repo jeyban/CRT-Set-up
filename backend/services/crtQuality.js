@@ -1,105 +1,159 @@
 /**
- * crtQuality.js — SHARED CRT Quality Score engine (ranking metric).
+ * crtQuality.js — SHARED CRT Quality scoring module (ranking + grading).
  *
- * SINGLE SOURCE OF TRUTH. Both scanners (Gainers & Losers and Market Radar)
- * import this exact module — the Quality Score is never duplicated. Any future
- * change here automatically benefits both scanners.
+ * SINGLE SOURCE OF TRUTH. Both Higher-Timeframe scanners (Gainers & Losers and
+ * Market Radar) and the legacy /api scanner import this exact module — the
+ * Quality Score / Grade / Strengths are never duplicated elsewhere.
  *
- * Ranks VALID CRT setups only. It NEVER invalidates a setup — a valid CRT is
- * valid regardless of its score; the score only determines ranking order.
+ * Responsibility boundary (unchanged):
+ *   • crtLogic.js  decides VALIDITY (is this a CRT at all?).
+ *   • crtQuality.js only RANKS + GRADES a setup the engine already accepted.
+ * Pure and dependency-free — no I/O, no live data, no persistence.
  *
- * Deliberately decoupled from the CRT engine (crtLogic.js): the engine decides
- * validity, this module only ranks what the engine already accepted. It is a
- * pure, dependency-free function — no I/O, no loops, no live data.
+ * ── Score model (0..100) ─────────────────────────────────────────────────
+ * Each raw metric produced by the engine is normalized to a 0..100 sub-score,
+ * then combined with the spec weights:
  *
- * Final Score = BodyScore*0.60 + ReclaimScore*0.25 + SweepScore*0.15,
- * clamped to 1..100 and rounded to the nearest whole number.
+ *   Body Ratio        30%   (displacement dominance: Body(C1) / Body(C2))
+ *   Wick Ratio        20%   (manipulation quality: sweep wick / Body(C2))
+ *   Sweep Distance    15%   (how far C2 swept beyond C1, in %)
+ *   Reclaim Depth     20%   (how deep C2 closed back inside C1, in %)
+ *   Impulse Strength  15%   (Body(C1) vs average body of previous candles)
  *
- * All three components are normalized to 0..100 from the two confirmed closed
- * candles (C1 = earlier, C2 = latest).
+ * The exposed `scoreBreakdown` reports each dimension's CONTRIBUTION in points
+ * (sub-score x weight), e.g. { body: 28, wick: 19, sweep: 14, reclaim: 18,
+ * impulse: 13 }. With every metric present these sum to the final score; when
+ * a metric is unavailable (e.g. no candle history for Impulse) its weight is
+ * dropped and the remaining weights are renormalized so the score stays 0..100.
  */
-
+​
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n));
 }
-
+​
+/** Component weights (as points out of 100). MUST sum to 100. */
+const WEIGHTS = {
+  body: 30,
+  wick: 20,
+  sweep: 15,
+  reclaim: 20,
+  impulse: 15,
+};
+​
 /**
- * Body Dominance saturation point. A Body Ratio (C1Body / C2Body) at or above
- * this value earns the full body score of 100. Chosen because a 20:1 body
- * dominance is already an extreme, decisive prior candle; beyond it, extra
- * ratio should not keep inflating the score. This is the single tunable knob
- * for the body-score curve.
+ * Saturation points. A metric at or above its "full" value earns the full 100
+ * for that component; beyond it, extra magnitude does not keep inflating the
+ * score (prevents any single outlier from dominating the ranking).
  */
-const BODY_RATIO_CAP = 20;
-const LOG_CAP = Math.log(BODY_RATIO_CAP); // precomputed norm:  log(cap)
-
-/**
- * Normalize the Body Ratio into 0..100 with smooth, capped-logarithmic
- * diminishing returns.
- *
- *   bodyScore = 100 * log(ratio) / log(BODY_RATIO_CAP), clamped to [0, 100]
- *
- * Properties (exactly what the spec asks for):
- *   • Larger ratios -> higher scores          (log is monotonically increasing)
- *   • Smooth & predictable                    (continuous log curve)
- *   • Extreme ratios can't dominate           (clamped at 100 from ratio >= cap)
- *
- * Reference points (cap = 20):
- *   ratio 1  -> 0      ratio 2  -> ~23     ratio 4  -> ~46
- *   ratio 10 -> ~77    ratio 20 -> 100     ratio 1000 -> 100 (capped)
- *
- * @param {number} ratio - C1Body / C2Body (>= 1 for a valid CRT).
- * @returns {number} 0..100
- */
-function normalizeBodyRatio(ratio) {
-  if (!(ratio > 1)) return 0;            // ratio <= 1 (or NaN) -> no dominance
-  if (!isFinite(ratio)) return 100;      // C2 body ~0 -> maximal dominance
-  return clamp((Math.log(ratio) / LOG_CAP) * 100, 0, 100);
+const BODY_RATIO_FULL = 6; // Body(C1)/Body(C2) >= 6   -> full body score
+const WICK_RATIO_FULL = 3; // wick/Body(C2)     >= 3   -> full wick score
+const SWEEP_PCT_FULL = 1.0; // sweep percent    >= 1.0% -> full sweep score
+const IMPULSE_FULL = 2.5; // Body(C1)/avgBody   >= 2.5 -> full impulse score
+// Reclaim Depth is already expressed as a 0..100 percentage.
+​
+function normBodyRatio(r) {
+  return r == null ? null : clamp((r / BODY_RATIO_FULL) * 100, 0, 100);
 }
-
-/**
- * Compute the 1..100 Quality Score for a VALID CRT setup.
- *
- * @param {"BULLISH"|"BEARISH"} direction
- * @param {Object} C1 - earlier closed candle { open, high, low, close }
- * @param {Object} C2 - latest closed candle { open, high, low, close }
- * @returns {number} integer in [1, 100]
- */
-function computeQuality(direction, C1, C2) {
-  const isBull = direction === "BULLISH";
-
-  // ── Component 1 — Body Dominance (60%) ────────────────────────────────────
-  // Explicitly RATIO-BASED: Body Ratio = C1Body / C2Body, normalized through a
-  // capped-logarithmic curve (see normalizeBodyRatio). For a valid CRT,
-  // C1Body > C2Body >= 0, so the ratio is >= 1 (C1Body > 0).
-  const c1Body = Math.abs(C1.close - C1.open);
-  const c2Body = Math.abs(C2.close - C2.open);
-  const bodyRatio = c2Body > 0 ? c1Body / c2Body : Infinity;
-  const bodyScore = normalizeBodyRatio(bodyRatio);
-
-  // C1's own range is the natural, scale-free container for the reclaim depth
-  // and the sweep size measurements below.
-  const c1Range = C1.high - C1.low;
-
-  // ── Component 2 — Reclaim Strength (25%) ─────────────────────────────────
-  // How deeply C2 closed back inside C1 past the swept boundary.
-  //   Bullish: distance C2.close sits below C1.high
-  //   Bearish: distance C2.close sits above C1.low
-  const reclaimDepth = isBull ? C1.high - C2.close : C2.close - C1.low;
-  const reclaimScore =
-    c1Range > 0 ? clamp((reclaimDepth / c1Range) * 100, 0, 100) : 0;
-
-  // ── Component 3 — Sweep Strength (15%) ───────────────────────────────────
-  //   Bullish: Sweep Size = C2.high - C1.high
-  //   Bearish: Sweep Size = C1.low  - C2.low
-  const sweepSize = isBull ? C2.high - C1.high : C1.low - C2.low;
-  const sweepScore =
-    c1Range > 0 ? clamp((sweepSize / c1Range) * 100, 0, 100) : 0;
-
-  const finalScore =
-    bodyScore * 0.6 + reclaimScore * 0.25 + sweepScore * 0.15;
-
-  return clamp(Math.round(finalScore), 1, 100);
+function normWickRatio(r) {
+  return r == null ? null : clamp((r / WICK_RATIO_FULL) * 100, 0, 100);
 }
-
-module.exports = { computeQuality, normalizeBodyRatio, BODY_RATIO_CAP };
+function normSweepPct(p) {
+  return p == null ? null : clamp((p / SWEEP_PCT_FULL) * 100, 0, 100);
+}
+function normReclaimDepth(d) {
+  return d == null ? null : clamp(d, 0, 100);
+}
+function normImpulse(r) {
+  return r == null ? null : clamp((r / IMPULSE_FULL) * 100, 0, 100);
+}
+​
+/**
+ * Map a 0..100 Quality Score to a letter grade.
+ *   A+ >= 90 | A >= 80 | B >= 70 | C >= 60 | D >= 50 | F < 50
+ */
+function gradeForScore(score) {
+  if (score >= 90) return "A+";
+  if (score >= 80) return "A";
+  if (score >= 70) return "B";
+  if (score >= 60) return "C";
+  if (score >= 50) return "D";
+  return "F";
+}
+​
+/**
+ * Human-readable reasons a setup scored well. Each rule fires ONLY when the
+ * corresponding raw metric clears a "genuinely good" threshold, so the returned
+ * array explains WHY this specific CRT is strong (empty when nothing stands out).
+ */
+const STRENGTH_RULES = [
+  { test: (m) => m.bodyRatio != null && m.bodyRatio >= 3, label: "Strong displacement" },
+  { test: (m) => m.wickRatio != null && m.wickRatio >= 2, label: "Excellent manipulation wick" },
+  { test: (m) => m.sweepPercent != null && m.sweepPercent >= 0.3, label: "Clean liquidity sweep" },
+  { test: (m) => m.reclaimDepth != null && m.reclaimDepth >= 50, label: "Deep reclaim" },
+  { test: (m) => m.impulseStrength != null && m.impulseStrength >= 1.5, label: "Above-average impulse" },
+];
+​
+function deriveStrengths(metrics) {
+  return STRENGTH_RULES.filter((r) => r.test(metrics)).map((r) => r.label);
+}
+​
+/**
+ * Compute the Quality Score, Grade, per-dimension breakdown and Strengths for a
+ * VALID CRT setup from its raw metrics.
+ *
+ * @param {Object} m
+ * @param {number}      m.bodyRatio       - Body(C1) / Body(C2)
+ * @param {number}      m.wickRatio       - manipulation wick / Body(C2)
+ * @param {number}      m.sweepPercent    - sweep distance beyond C1 level (%)
+ * @param {number}      m.reclaimDepth    - how deep C2 closed inside C1 (%)
+ * @param {number|null} m.impulseStrength - Body(C1) / avgBody (null if unknown)
+ * @returns {{ qualityScore:number, qualityGrade:string, breakdown:Object, strengths:string[] }}
+ */
+function computeQuality(m) {
+  const components = [
+    { key: "body", weight: WEIGHTS.body, score: normBodyRatio(m.bodyRatio) },
+    { key: "wick", weight: WEIGHTS.wick, score: normWickRatio(m.wickRatio) },
+    { key: "sweep", weight: WEIGHTS.sweep, score: normSweepPct(m.sweepPercent) },
+    { key: "reclaim", weight: WEIGHTS.reclaim, score: normReclaimDepth(m.reclaimDepth) },
+    { key: "impulse", weight: WEIGHTS.impulse, score: normImpulse(m.impulseStrength) },
+  ];
+​
+  let weightedPoints = 0; // sum of (subScore/100 * weightPoints)
+  let weightAvailable = 0; // sum of weightPoints actually used
+  const breakdown = {};
+​
+  for (const c of components) {
+    if (c.score == null) {
+      breakdown[c.key] = null; // metric not available for this setup
+      continue;
+    }
+    const contribution = (c.score / 100) * c.weight; // points out of c.weight
+    breakdown[c.key] = Math.round(contribution);
+    weightedPoints += contribution;
+    weightAvailable += c.weight;
+  }
+​
+  // Renormalize by available weight so a missing metric can't deflate the score.
+  const finalScore = weightAvailable > 0 ? (weightedPoints / weightAvailable) * 100 : 0;
+  const qualityScore = clamp(Math.round(finalScore), 0, 100);
+​
+  return {
+    qualityScore,
+    qualityGrade: gradeForScore(qualityScore),
+    breakdown,
+    strengths: deriveStrengths(m),
+  };
+}
+​
+module.exports = {
+  computeQuality,
+  gradeForScore,
+  deriveStrengths,
+  clamp,
+  WEIGHTS,
+  BODY_RATIO_FULL,
+  WICK_RATIO_FULL,
+  SWEEP_PCT_FULL,
+  IMPULSE_FULL,
+};
+​
