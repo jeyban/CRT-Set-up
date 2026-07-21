@@ -1,16 +1,16 @@
 /**
- * crtQuality.js — SHARED CRT Quality scoring module (ranking + grading).
+ * crtQuality.js - SHARED CRT Quality scoring module (ranking + grading).
  *
  * SINGLE SOURCE OF TRUTH. Both Higher-Timeframe scanners (Gainers & Losers and
- * Market Radar) and the legacy /api scanner import this exact module — the
+ * Market Radar) and the legacy /api scanner import this exact module - the
  * Quality Score / Grade / Strengths are never duplicated elsewhere.
  *
  * Responsibility boundary (unchanged):
  *   • crtLogic.js  decides VALIDITY (is this a CRT at all?).
  *   • crtQuality.js only RANKS + GRADES a setup the engine already accepted.
- * Pure and dependency-free — no I/O, no live data, no persistence.
+ * Pure and dependency-free - no I/O, no live data, no persistence.
  *
- * ── Score model (0..100) ─────────────────────────────────────────────────
+ * -- Score model (0..100) -------------------------------------------------
  * Each raw metric produced by the engine is normalized to a 0..100 sub-score,
  * then combined with the spec weights:
  *
@@ -156,4 +156,3 @@ module.exports = {
   SWEEP_PCT_FULL,
   IMPULSE_FULL,
 };
-​
