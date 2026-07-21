@@ -1,9 +1,9 @@
 /**
- * radarScheduler.js — Three INDEPENDENT cron schedulers for the Market Radar module.
+ * radarScheduler.js - Three INDEPENDENT cron schedulers for the Market Radar module.
  *
  * All times are UTC. Radar scans higher timeframes only (1d / 1w / 1m), so its
- * schedules are deliberately infrequent — this keeps the app light enough for
- * Render Free (a 300–500 symbol scan is heavier than a 60 symbol GL scan, so we
+ * schedules are deliberately infrequent - this keeps the app light enough for
+ * Render Free (a 300-500 symbol scan is heavier than a 60 symbol GL scan, so we
  * never run it more than once per candle).
  *
  *   1D Scanner : 2 minutes after the daily candle close (00:00 UTC) -> 00:02 UTC.
@@ -20,7 +20,7 @@
  *                cron: "1 0 1 * *"
  *
  * Each scanner is registered separately and calls radarScanner.runScan(tf,
- * "auto") independently — one schedule can never affect another.
+ * "auto") independently - one schedule can never affect another.
  *
  * Startup scans are OFF by default (RADAR_STARTUP_SCAN != "true") to protect
  * the Render Free instance from a heavy broad-market scan on every boot/redeploy.
@@ -99,7 +99,7 @@ async function autoScan(tf) {
 /** Register all three independent cron jobs. */
 function startRadarScheduler() {
   if (started) {
-    console.log("📡 [RADAR] Scheduler already running — skipping duplicate registration");
+    console.log("📡 [RADAR] Scheduler already running - skipping duplicate registration");
     return;
   }
   started = true;
@@ -113,7 +113,7 @@ function startRadarScheduler() {
   refreshNextScans();
   setInterval(refreshNextScans, 60 * 1000);
 ​
-  // Optional startup scans — OFF by default to protect Render Free.
+  // Optional startup scans - OFF by default to protect Render Free.
   if (process.env.RADAR_STARTUP_SCAN === "true") {
     runRadarStartupScans();
   }
@@ -128,7 +128,7 @@ function runRadarStartupScans() {
   order.forEach((tf, i) => {
     setTimeout(() => {
       autoScan(tf).catch((e) => console.error(`[RADAR startup ${tf}]`, e.message));
-    }, i * 90000); // 0s, 90s, 180s — never overlap heavy scans
+    }, i * 90000); // 0s, 90s, 180s - never overlap heavy scans
   });
 }
 ​
