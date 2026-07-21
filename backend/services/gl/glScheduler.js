@@ -1,5 +1,5 @@
 /**
- * glScheduler.js — Three INDEPENDENT cron schedulers for the Gainers/Losers module.
+ * glScheduler.js - Three INDEPENDENT cron schedulers for the Gainers/Losers module.
  *
  * All times are UTC. The current user's exchange (MEXC) daily candle closes at
  * 00:00 UTC, which corresponds to the 8:00 AM example given (UTC+8).
@@ -17,7 +17,7 @@
  *                  cron: "1 0 * * *"
  *
  * Each scanner is registered separately and calls glScanner.runScan(tf, "auto")
- * independently — one schedule can never affect another.
+ * independently - one schedule can never affect another.
  */
 ​
 const cron = require("node-cron");
@@ -96,7 +96,7 @@ async function autoScan(tf) {
 /** Register all three independent cron jobs. */
 function startGlScheduler() {
   if (started) {
-    console.log("⏰ [GL] Scheduler already running — skipping duplicate registration");
+    console.log("⏰ [GL] Scheduler already running - skipping duplicate registration");
     return;
   }
   started = true;
@@ -132,3 +132,4 @@ module.exports = {
   refreshNextScans,
   CRON,
 };
+​
