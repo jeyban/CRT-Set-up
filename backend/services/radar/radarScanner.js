@@ -1,17 +1,17 @@
 /**
- * radarScanner.js — Scan engine for the Market Radar CRT module.
+ * radarScanner.js - Scan engine for the Market Radar CRT module.
  *
  * Logically INDEPENDENT from the Gainers/Losers scanner (its own universe
  * provider, timeframe config, store and running guard), but it shares the exact
  * same BUSINESS LOGIC:
  *   • CRT detection  -> ../crtLogic   (detectCRT / getConfirmedPair)
  *   • Quality Score  -> ../crtQuality (computeQuality)
- * These are the identical modules the GL scanner imports — never duplicated.
+ * These are the identical modules the GL scanner imports - never duplicated.
  *
  * Per-scan workflow:
- *   1. Build the broad-market universe (Top 300–500 by turnover) EXCLUDING the
+ *   1. Build the broad-market universe (Top 300-500 by turnover) EXCLUDING the
  *      current Top 30 Gainers + Top 30 Losers.
- *   2. Scan that universe with detectCRT() — closed candles only.
+ *   2. Scan that universe with detectCRT() - closed candles only.
  *   3. Score + sort valid setups (highest quality first), then persist.
  *
  * The enriched result shape is IDENTICAL to the GL scanner's, so both scanners
@@ -32,7 +32,7 @@ const store = require("./radarStore");
 const DELAY_MS = 150;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 ​
-// Per-timeframe running guard — independent locks (1d / 1w / 1m).
+// Per-timeframe running guard - independent locks (1d / 1w / 1m).
 const running = { "1d": false, "1w": false, "1m": false };
 ​
 /** Map the engine's direction to a trading signal label. */
@@ -56,7 +56,7 @@ async function runScan(tf, type = "manual") {
   if (!store.isValidTf(tf)) throw new Error(`Invalid timeframe: ${tf}`);
 ​
   if (running[tf]) {
-    store.appendLog(tf, "warn", `Scan already running for ${tf} — ignored duplicate trigger`);
+    store.appendLog(tf, "warn", `Scan already running for ${tf} - ignored duplicate trigger`);
     return { results: store.getResults(tf), summary: store.getState(tf), alreadyRunning: true };
   }
   running[tf] = true;
@@ -79,7 +79,7 @@ async function runScan(tf, type = "manual") {
   store.appendLog(
     tf,
     "info",
-    `Universe ready — ${universe.length} coins (top ${universe.length} by turnover, excl. ${uni.excluded.length} top movers)`
+    `Universe ready - ${universe.length} coins (top ${universe.length} by turnover, excl. ${uni.excluded.length} top movers)`
   );
 ​
   const results = [];
@@ -96,7 +96,7 @@ async function runScan(tf, type = "manual") {
         continue;
       }
 ​
-      // Shared confirmed closed-candle CRT engine — detection only.
+      // Shared confirmed closed-candle CRT engine - detection only.
       const alert = detectCRT(symbol, tf, candles);
 ​
       scanned++;
@@ -139,7 +139,7 @@ async function runScan(tf, type = "manual") {
     } catch (err) {
       errors++;
       store.updateProgress(tf, { errors: 1 });
-      store.appendLog(tf, "error", `${symbol} — ${err.message}`);
+      store.appendLog(tf, "error", `${symbol} - ${err.message}`);
     }
     await sleep(DELAY_MS);
   }
@@ -162,7 +162,7 @@ async function runScan(tf, type = "manual") {
   store.appendLog(
     tf,
     "info",
-    `■ Scan complete — ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
+    `■ Scan complete - ${scanned}/${universe.length} scanned, ${results.length} CRT found, ${errors} errors`
   );
 ​
   running[tf] = false;
@@ -174,4 +174,3 @@ function isRunning(tf) {
 }
 ​
 module.exports = { runScan, isRunning, toSignal, chartLink };
-​
